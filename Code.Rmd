@@ -1,0 +1,382 @@
+---
+title: "Development Economics I - Project 1"
+author: "Sepehr Hasanvand"
+date: "`r Sys.Date()`"
+output:
+    html_document:
+        theme: readable    
+        highlight: kate
+        toc: true    
+        toc_depth: 4
+        toc_float: true    
+        df_print: paged
+        code_folding: hide    
+        css: styles.css
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+Required libraries
+
+```{r, results='asis',message=FALSE}
+library(readxl)
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(stargazer)
+library(tidyverse)
+
+
+```
+
+```{r,results='asis',message=FALSE}
+
+# Import data sources from excel file
+data_workshop <- read_excel("D:/Masters student/Term 3/Dev/Project/Data/SeriZamani_Sanat_81-99.xlsx", sheet = 2)
+data_inflation <-   read_excel("D:/Masters student/Term 3/Dev/Project/Data/Tavarom.xlsx")
+# Renaming Variable Names
+data_workshop <- data_workshop %>%
+  rename(year= "خلاصه آمار کارگاه‏ها بر حسب فعالیت - 1399-1381                                (میلیون ریال)",   
+         Sath_Code_Faaliat=...2,                              # سطح کد فعالیت 
+         Code_Faaliat=...3,                                   # کد فعالیت
+         Faaliat=...4,                                        # فعالیت
+         Tedad_Kargah=...5,                                   # تعداد کارگاه ها
+         Malekiat_Tavoni=...6,                                # وضع مالکیت: خصوصی: تعاونی
+         Malekiat_Sayer=...7,                                 # وضع مالکیت: خصوصی: سایر
+         Malekiat_Omoomi=...8,                                # وضع مالکیت: خصوصی: عمومی
+         Modiriat_Khososi=...9,                               # نحوه مدیریت: خصوصی
+         Moiriate_Omoomi=...10,                               # نحوه مدیریت: عمومی
+         Shaghel_KOl_Jam=...11,                               # تعداد شاغلان: کل: جمع:
+         Shaghel_kol_Mard=...12,                              # تعداد شاغلان: کل: مرد
+         Shaghel_kol_Zan=...13,                               # تعداد شاغلان: کل: مرد
+         Shaghel_BaMozd_Mard=...14,                           # تعداد شاغلان: با مزد: مرد
+         Shaghel_BaMozd_Zan=...15,                            # تعداد شاغلان: با مزد:  زن
+         Shaghel_BiMozd_Mard=...16,                           # تعداد شاغلان: بی مزد: مرد
+         Shaghel_BiMozd_zan=...17,                            # تعداد شاغلان: بی مزد: زن
+         Arzesh_Jobran_Khadamat=...18,                        # ارزش جبران خدمات 
+         Arzesh_Mavad_Kham_KOl=...19,                         # ارزش مواد خام و اولیه، لوازم بسته بندی، ابزار و وسایل کار مم دوام: کل (خارجی و داخلی)
+         Arzesh_Mavad_Kham_kharegi=...20,                     # ارزش مواد خام و اولیه، لوازم بسته بندی، ابزار و وسایل کار مم دوام: خارجی
+         Arzesh_Mahsol_Tolid=...21,                           # ارزش محصولات تولید کننده
+         Arzesh_Foroosh=...22,                                # ارزش فروش
+         Arzesh_Saderat_Mostaghim_Mill=...23,                 # ارزش صادرات مستقیم: میلیون ریال
+         Arzesh_Saderat_Mostaghim_dollors=...24,              # ارزش صادرات مستقیم: معادل به هزاردلار
+         Arzesh_Nahade_Faaliat_Sanati=...25,                  # ارزش نهاده فعالیت صنعتی
+         Arzesh_Setade_Faaliat_Sanati=...26,                  # ارزش ستاده فعالیت صنعتی
+         Arzesh_Afzoodeh_Faaliat_Sanati=...27,                # ارزش افزوده فعالیت صنعتی 
+         Arzesh_Khadamat_Gheir_Sanaati_Daryafti=...28,        # ارزش خدمات غیرصنعتی دریافتی
+         Arzesh_Khadamat_Gheir_Sanaati_Pardakhti=...29,       # ارزش خدمات غیر صنعتی پرداختی
+         Arzesh_Maliat_Gheir_Mostaghim=...30,                 # ارزش مالیات غیر مستقیم و عوارض
+         Arzesh_Tashkil_Sarmaye_MogodiAnbar=...31,            # ارزش تشکیل سرمایه: ارزش موجودی انبار
+         Arzesh_Tashkil_Sarmaye_Sarmaye_Sabet=...32)%>%          # تشش تشکیل سرمایه: ارکیل سرمایه ثابت
+  filter(year > 1394)
+
+
+data_inflation <- data_inflation %>%
+  rename(year="سال",
+         Inflation_rate="نرخ تورم")%>%
+  filter(year > 1394)
+
+# Merge two data sources
+data_workshop <- merge(data_workshop,data_inflation, by = "year", all = TRUE)
+```
+
+Defining Treatment and Control groups.
+
+```{r,results='asis'}
+# Filter data for specific industries and create two dummy variables:
+# 1. 'rate4200' for treatment (1) and control (0) groups based on 'Code_Faaliat'.
+# 2. 'dummy_post_4200' to indicate if the year is 1397 or later (1) or before (0) for the policy implementation.
+
+data_workshop <- data_workshop %>%
+  filter(Code_Faaliat %in% c(10, 22, 21, 20, 28, 11, 12, 13, 15, 17, 31, 32, 33)) %>%
+  mutate(
+    treatment = ifelse(Code_Faaliat %in% c(17, 22, 10, 21, 20, 28), 1, 0),
+    post = ifelse(year >= 1397, 1, 0)
+  )
+
+# Convert relevant columns ('Arzesh_Foroosh', 'Inflation_rate', 'Arzesh_Saderat_Mostaghim_Mill') to numeric type,
+# and then create adjusted value columns by dividing the respective variables by the 'Inflation_rate' 
+# ('Arzesh_Foroosh_Adjusted' and 'Arzesh_Saderat_Mostaghim_Mill_Adjusted') to account for inflation.
+
+data_workshop <- data_workshop %>%
+  mutate(
+    across(.cols = -Faaliat, .fns = as.numeric),
+    Arzesh_Foroosh = Arzesh_Foroosh,
+    Inflation_rate = ((Inflation_rate) / 100)+1,  # تبدیل درصد به کسری
+    Arzesh_Saderat_Mostaghim_Mill = as.numeric(Arzesh_Saderat_Mostaghim_Mill),
+    
+  ) %>%
+  mutate(
+    Arzesh_Foroosh_Adjusted = Arzesh_Foroosh / Inflation_rate,
+    Arzesh_Saderat_Mostaghim_Mill_Adjusted = Arzesh_Saderat_Mostaghim_Mill / Inflation_rate,
+    Arzesh_Tashkil_Sarmaye_Sarmaye_Sabet_Adjusted=Arzesh_Tashkil_Sarmaye_Sarmaye_Sabet/Inflation_rate,
+    Arzesh_Mahsol_Tolid_Adjusted=Arzesh_Mahsol_Tolid/Inflation_rate,
+    Arzesh_Foroosh_log = log(Arzesh_Foroosh_Adjusted),
+    Arzesh_Saderat_Mostaghim_log=log(Arzesh_Saderat_Mostaghim_Mill_Adjusted),
+    Shaghel_KOl_Jam_log=log( Shaghel_KOl_Jam),
+    Shaghel_kol_Zan_log=log(Shaghel_kol_Zan)
+  )
+
+```
+
+Summary Statistics
+
+```{r,results='asis'}
+# Assuming the six industries are already filtered by their respective codes
+industry_codes <- c(17, 22, 10, 21, 20, 28)  # Add the correct industry codes
+
+# Filter the data for the six industries
+filtered_industries_data <- data_workshop %>%
+  filter(Code_Faaliat %in% industry_codes)
+
+# Plot number of workshops over time for each industry using facet_wrap
+ggplot(filtered_industries_data, aes(x = year, y = Tedad_Kargah)) +
+  geom_line(color = "blue", size = 1) +  
+  geom_point(color = "red", size = 2) +  
+  facet_wrap(~ Code_Faaliat, scales = "free_y", labeller = as_labeller(c(
+    "17" = "Paper Industry",
+    "22" = "Rubber and Plastic Products",
+    "10" = "Food Products Industry",
+    "21" = "Pharmaceuticals",
+    "20" = "Chemical Industry",
+    "28" = "Manufacture of Machinery"
+  ))) +  # Label industries
+  labs(
+    x = "Year",
+    y = "Number of Workshops"
+  ) +
+  theme_minimal() +
+  scale_x_continuous(breaks = unique(filtered_industries_data$year)) +  
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(size = 8, face = "bold")  # Smaller facet label size
+  )
+
+```
+
+```{r}
+# Filter the data for the Treatment industries (Code_Faaliat == 17, 22, 10, 21, 20, 28)
+data_filtered <- data_workshop %>%
+  filter(Code_Faaliat %in% c(17, 22, 10, 21, 20, 28))
+
+industry_names <- c(
+  "17" = "Paper Industry",
+  "22" = "Rubber and Plastic Industry",
+  "10" = "Food Products Industry",
+  "21" = "Pharmaceuticals  ",
+  "20" = "Chemical Industry",
+  "28" = "Manufacture of Machinery"
+)
+
+# Add the industry names to the data frame
+data_filtered <- data_filtered %>%
+  mutate(Industry_Name = factor(Code_Faaliat, levels = names(industry_names), labels = industry_names))
+
+# The plot for male and female employees receiving wages over years
+ggplot(data_filtered, aes(x = year)) +
+  geom_bar(aes(y = Shaghel_BaMozd_Mard, fill = "Male"), stat = "identity", position = "dodge") +
+  geom_bar(aes(y = Shaghel_BaMozd_Zan, fill = "Female"), stat = "identity", position = "dodge") +
+  facet_wrap(~ Industry_Name, scales = "free_y") +  # Facet by Industry Name
+  labs(
+    x = "Year",
+    y = "Number of Employees",
+    fill = "Gender"
+  ) +
+  scale_fill_manual(values = c("Male" = "lightgreen", "Female" = "salmon")) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(size = 8)  # Make the facet labels smaller
+  )
+
+
+```
+
+```{r}
+
+# The plot for male and female employees not receiving wages over years for the specified industries
+ggplot(data_filtered, aes(x = year)) +
+  geom_bar(aes(y = Shaghel_BiMozd_Mard, fill = "Male"), stat = "identity", position = "dodge") +
+  geom_bar(aes(y = Shaghel_BiMozd_zan, fill = "Female"), stat = "identity", position = "dodge") +
+  facet_wrap(~ Industry_Name, scales = "free_y") +  # Facet by Industry Name
+  labs(
+    x = "Year",
+    y = "Number of Employees",
+    fill = "Gender"
+  ) +
+  scale_fill_manual(values = c("Male" = "lightgreen", "Female" = "salmon")) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+```
+
+```{r}
+# Filter data 
+data_filtered_sectors <- data_workshop %>%
+  filter(Code_Faaliat %in% c(17, 22, 10, 21, 20, 28)) %>%
+  mutate(Industry_Name = recode(Code_Faaliat, !!!industry_names))
+
+# Plot 1: Product Value 
+ggplot(data_filtered_sectors, aes(x = year, y = Arzesh_Mahsol_Tolid_Adjusted, color = Industry_Name)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "Year",
+    y = "Product Value",
+    color = "Industry"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+# Plot 2: Sales Value
+ggplot(data_filtered_sectors, aes(x = year, y = Arzesh_Foroosh_Adjusted, color = Industry_Name)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "Year",
+    y = "Sales Value",
+    color = "Industry"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plot 3: Capital Accumulation 
+ggplot(data_filtered_sectors, aes(x = year, y = Arzesh_Tashkil_Sarmaye_Sarmaye_Sabet_Adjusted, color = Industry_Name)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "Year",
+    y = "Capital Accumulation ",
+    color = "Industry"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+Effect of the 4200 Exchange rate
+   
+---Effect on Number Of Workers
+```{r,results='asis'}
+# Parallel trend for Number of Workshops in log form
+trend_data_Shaghel_log <- data_workshop %>%
+  group_by(year, treatment) %>%
+  summarise(mean_Shaghel = mean( Shaghel_KOl_Jam_log, na.rm = TRUE)) %>%
+  ungroup()  
+
+ggplot(trend_data_Shaghel_log, aes(x = year, y = mean_Shaghel, color = factor(treatment), group = treatment)) +
+  geom_line(size = 1) +  
+  geom_vline(xintercept = 1397, linetype = "dashed", color = "red", size = 1) + # رسم خط روند
+  labs(x = "Year", y = "log(Number of Workers)", color = "Treatment Group") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+# Parallel trend for Number of Workshops
+trend_data_Shaghel <- data_workshop %>%
+  group_by(year, treatment) %>%
+  summarise(mean_Shaghel = mean( Shaghel_KOl_Jam, na.rm = TRUE)) %>%
+  ungroup()  
+
+ggplot(trend_data_Shaghel, aes(x = year, y = mean_Shaghel, color = factor(treatment), group = treatment)) +
+  geom_line(size = 1) +  
+  geom_vline(xintercept = 1397, linetype = "dashed", color = "red", size = 1) + # رسم خط روند
+  labs(x = "Year", y = "Number of Workers", color = "Treatment Group") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+
+# Running the Diff_in_Diff Regression for Number of Workers
+model <- lm(Shaghel_KOl_Jam_log ~ treatment * post + treatment +factor(year) + factor(Code_Faaliat), data = data_workshop)
+
+stargazer(model, type = "latex", 
+          omit = c("factor(year)", "factor(Code_Faaliat)"), 
+          keep = c("treatment", "post", "treatment:post"), 
+          dep.var.labels = c("log(Number OF Workers)"))
+```
+
+Effect on Number Of Female Workers
+
+```{r}
+# Parallel trend for Number of Female Workshops
+trend_data_Shaghel_Zan <- data_workshop %>%
+  group_by(year, treatment) %>%
+  summarise(mean_Shaghel_Zan = mean( Shaghel_kol_Zan_log, na.rm = TRUE)) %>%
+  ungroup()  
+
+ggplot(trend_data_Shaghel_Zan, aes(x = year, y = mean_Shaghel_Zan, color = factor(treatment), group = treatment)) +
+  geom_line(size = 1) +  
+  geom_vline(xintercept = 1397, linetype = "dashed", color = "red", size = 1) + # رسم خط روند
+  labs(x = "Year", y = "log(Number of Female Workers)", color = "Treatment Group") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+# Running the Diff_in_Diff Regression for Number of Female Workers
+model_2 <- lm(Shaghel_kol_Zan_log ~ treatment * post + treatment +factor(year) + factor(Code_Faaliat), data = data_workshop)
+
+stargazer(model_2, type = "latex", 
+          omit = c("factor(year)", "factor(Code_Faaliat)"), 
+          keep = c("treatment", "post", "treatment:post"), 
+          dep.var.labels = c("log(Number OF Female Workers)"))
+```
+
+Effect on Sales Value
+
+```{r,results='asis'}
+# Parallel trend for Sales value
+trend_data_Arzesh_F <- data_workshop %>%
+  group_by(year, treatment) %>%
+  summarise(mean_Arzesh_F = mean(Arzesh_Foroosh_log, na.rm = TRUE)) %>%
+  ungroup()  
+
+ggplot(trend_data_Arzesh_F, aes(x = year, y = mean_Arzesh_F, color = factor(treatment), group = treatment)) +
+  geom_line(size = 1) +  
+  geom_vline(xintercept = 1397, linetype = "dashed", color = "red", size = 1) + # رسم خط روند
+  labs(x = "Year", y = "log(Adjusted Sales value)", color = "Treatment Group") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+# Running the Diff_in_Diff Regression for Sales Value
+model_3 <- lm(Arzesh_Foroosh_log ~ treatment * post + treatment +factor(year) + factor(Code_Faaliat), data = data_workshop)
+
+stargazer(model_3, type = "latex", 
+          omit = c("factor(year)", "factor(Code_Faaliat)"), 
+          keep = c("treatment", "post", "treatment:post"), 
+          dep.var.labels = c("log(Adjusted Sales Value)"))
+
+
+
+```
+
+Effect on Direct Export Value
+
+```{r,results='asis'}
+# Parallel trend for Export value
+trend_data_Arzesh_S <- data_workshop %>%
+  group_by(year, treatment) %>%
+  summarise(mean_Arzesh_S = mean(Arzesh_Saderat_Mostaghim_log, na.rm = TRUE)) %>%
+  ungroup()  
+
+ggplot(trend_data_Arzesh_S, aes(x = year, y = mean_Arzesh_S, color = factor(treatment), group = treatment)) +
+  geom_line(size = 1) +  
+  geom_vline(xintercept = 1397, linetype = "dashed", color = "red", size = 1) + # رسم خط روند
+  labs(x = "Year", y = "log(Adjusted Export Value)", color = "Treatment Group") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+# Running the Diff_in_Diff Regression for Export Value
+model_4 <- lm(Arzesh_Saderat_Mostaghim_log~ treatment * post + treatment +factor(year) + factor(Code_Faaliat), data = data_workshop)
+
+stargazer(model_4, type = "latex", 
+          omit = c("factor(year)", "factor(Code_Faaliat)"), 
+          keep = c("treatment", "post", "treatment:post"), 
+          dep.var.labels = c("log(Adjusted Export Value)"))
+```
